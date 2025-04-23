@@ -45,3 +45,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Piece: {fileID: 8151643478319012155, guid: 5d9d95ec809ac3c4da24c90ba1384fc5, type: 3}
+  bPieces: []
+  wPieces: []
+  currentPlayer: White
+  gameOver: 0
+  aiDifficulty: 2
+  aiIsBlack: 1

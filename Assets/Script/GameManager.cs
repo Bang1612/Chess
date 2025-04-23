@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -16,7 +17,8 @@ public class GameManager : MonoBehaviour
     public string currentPlayer = "White";
     public bool gameOver = false;
     // public PlayerManager pm;
-    
+    public bool isCloned=false;
+    public GameObject DownText;
     public AI.Difficulty aiDifficulty = AI.Difficulty.Dumb;
     public AI ai;
     public bool aiIsBlack = true;
@@ -27,8 +29,25 @@ public class GameManager : MonoBehaviour
     
     void Start()
     {
+        ai = GameObject.Find("AI").GetComponent<AI>();
+        aiDifficulty = ai.GetAIType();
+        switch (aiDifficulty)
+        {
+            case AI.Difficulty.Dumb:
+            Debug.Log("Easy mode");
+            break;
+            case AI.Difficulty.Average:
+            Debug.Log("Normal mode");
+            break;
+            case AI.Difficulty.Smart:
+            Debug.Log("Hard mode");
+            break;
+            default:
+            break;
+        }
         GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().enabled = true;
-        GameObject.FindGameObjectWithTag("DownText").GetComponent<Text>().enabled = false;
+        DownText =GameObject.FindGameObjectWithTag("DownText");
+        DownText.SetActive(false);
         GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().text=currentPlayer;
         // ai = new AI(aiDifficulty);
         // ai.aiType =AI.Difficulty.Dumb;
@@ -79,12 +98,14 @@ public class GameManager : MonoBehaviour
     }
     public void Nexturn(){
         currentPlayer = (currentPlayer == "White") ? "Black" : "White";
-    if (currentPlayer == "Black") {
-        // Delay slightly so the player sees the switch
-        Invoke(nameof(AIMove), 0.5f);
-    }
         GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().text=currentPlayer;
-    }
+        // schedule AI only on the *real* board, not on clones
+        bool aiTurn = (currentPlayer == "Black" && aiIsBlack)
+                || (currentPlayer == "White" && !aiIsBlack);
+
+        if (!isCloned && aiTurn)
+            Invoke(nameof(AIMove), 0.5f);
+        }
     private void AIMove() {
     
         ai.GetBestMove();
@@ -95,7 +116,7 @@ public class GameManager : MonoBehaviour
     {
         if(gameOver && Input.GetMouseButtonDown(0)){
             gameOver=false;
-            SceneManager.LoadScene("Game");
+            // SceneManager.LoadScene("Game");
         }
         // GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().text=currentPlayer;
         // if (!gameOver && ((currentPlayer == "Black" && aiIsBlack) || (currentPlayer == "White" && !aiIsBlack)))
@@ -108,7 +129,7 @@ public class GameManager : MonoBehaviour
         // GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().enabled = true;
         GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().text="Winner: "+winner;
         
-        GameObject.FindGameObjectWithTag("DownText").GetComponent<Text>().enabled = true;
+        DownText.SetActive(true);
     }
     public void GetAllLegalMoves(List<Move> moves){
         Debug.Log("Start Getting moves");
@@ -226,20 +247,29 @@ private void AddKingMoves(List<Move> moves, int x, int y) {
 
 public void ApplyMove(Move m){
     GameObject startPiece = GetPosition(m.fromX,m.fromY);
-    
+    if (startPiece == null)
+    {
+        Debug.LogError($"ApplyMove: no piece at ({m.fromX},{m.fromY})");
+        return;
+    }
     if(m.isAttack){
         GameObject endPiece = GetPosition(m.toX,m.toY);
-        if(endPiece.name == "WKing" ){
-            Winner("Black");
+        if (endPiece != null)
+        {
+            if (endPiece.name == "WKing") Winner("Black");
+            else if (endPiece.name == "BKing") Winner("White");
+
+            if (bPieces.Contains(endPiece)) bPieces.Remove(endPiece);
+            else if (wPieces.Contains(endPiece)) wPieces.Remove(endPiece);
+
+            endPiece.SetActive(false);
         }
-        if(endPiece.name == "BKing" ){
-            Winner("White");
+        else
+        {
+            Debug.LogWarning($"ApplyMove: expected to capture at ({m.toX},{m.toY}) but found none");
         }
         
-        if (bPieces.Contains(endPiece)) bPieces.Remove(endPiece);
-    else if (wPieces.Contains(endPiece)) wPieces.Remove(endPiece);
         
-        endPiece.SetActive(false);
     }
     SetPositionEmpty(m.fromX,m.fromY);
     startPiece.GetComponent<ChessPiece>().Goto(m.toX,m.toY);
@@ -248,10 +278,44 @@ public void ApplyMove(Move m){
 
 }
 
+public void VisualApplyMove(Move m)
+{
+    // grab the “moving” piece reference
+    GameObject mover = positions[m.fromX, m.fromY];
+    if (mover == null) return;  // sanity check
+
+    // clear the source square
+    positions[m.fromX, m.fromY] = null;
+
+    // if it’s a capture, remove that piece from our lists & array
+    if (m.isAttack)
+    {
+        GameObject victim = positions[m.toX, m.toY];
+        if (victim != null)
+        {
+            bPieces.Remove(victim);
+            wPieces.Remove(victim);
+            positions[m.toX, m.toY] = null;
+        }
+    }
+
+    // place the mover in its new square
+    positions[m.toX, m.toY] = mover;
+    
+    // update your piece‐lists so that search’s bPieces/wPieces stay in sync
+    // (they track GameObject references, not positions, so this is already correct)
+
+    // // flip the “turn” so your GetAllLegalMoves(...) for the next search node sees the right side
+    currentPlayer = (currentPlayer == "White") ? "Black" : "White";
+
+}
+
 public GameManager Clone() {
     // Create a new GameObject instance and copy fields, or
     // manually new‐up a GameManager and deep‐copy arrays & lists.
     var copy = new GameManager();
+    copy.isCloned = true;
+    copy.aiIsBlack = this.aiIsBlack;
     copy.currentPlayer = this.currentPlayer;
     copy.gameOver      = this.gameOver;
     copy.positions     = (GameObject[,]) this.positions.Clone();
@@ -259,16 +323,101 @@ public GameManager Clone() {
     copy.wPieces       = new List<GameObject>(this.wPieces);
     return copy;
 }
+// public BoardSnapshot ToBoardSnapshot()
+// {
+//     var snap = new BoardSnapshot();
+//     // whose turn?
+//     snap.whiteToMove = (currentPlayer == "White");
+
+//     // walk every square
+//     for (int x = 0; x < 8; x++)
+//     for (int y = 0; y < 8; y++)
+//     {
+//         GameObject go = positions[x, y];
+//         if (go == null)
+//         {
+//             // empty square
+//             snap.board[x, y] = global::Piece.Empty;
+//         }
+//         else
+//         {
+//             // piece is alive here—map its name to the enum
+//             // strip any "(Clone)" suffix Unity may append
+//             string n = go.name;
+//             int idx = n.IndexOf('(');
+//             if (idx >= 0) n = n.Substring(0, idx);
+
+//             switch (n)
+//             {
+//                 case "WPawn":   snap.board[x, y] = global::Piece.WPawn;   break;
+//                 case "WKnight": snap.board[x, y] = global::Piece.WKnight; break;
+//                 case "WBishop": snap.board[x, y] = global::Piece.WBishop; break;
+//                 case "WRook":   snap.board[x, y] = global::Piece.WRook;   break;
+//                 case "WQueen":  snap.board[x, y] = global::Piece.WQueen;  break;
+//                 case "WKing":   snap.board[x, y] = global::Piece.WKing;   break;
+
+//                 case "BPawn":   snap.board[x, y] = global::Piece.BPawn;   break;
+//                 case "BKnight": snap.board[x, y] = global::Piece.BKnight; break;
+//                 case "BBishop": snap.board[x, y] = global::Piece.BBishop; break;
+//                 case "BRook":   snap.board[x, y] = global::Piece.BRook;   break;
+//                 case "BQueen":  snap.board[x, y] = global::Piece.BQueen;  break;
+//                 case "BKing":   snap.board[x, y] = global::Piece.BKing;   break;
+
+//                 default:
+//                     // shouldn't happen, but safe-guard
+//                     snap.board[x, y] = global::Piece.Empty;
+//                     Debug.LogWarning($"Unknown piece name '{go.name}' at [{x},{y}]");
+//                     break;
+//             }
+//         }
+//     }
+
+//     return snap;
+// }
+
 
 public float Evaluate() {
-    float score = 0;
-    float fluctuation = UnityEngine.Random.Range(-ai.randomness, +ai.randomness);
-    foreach (var p in bPieces) 
-        score -= PieceValue(p)*(1f + fluctuation);   // black is negative for AI
-    foreach (var p in wPieces) 
-        score += PieceValue(p)*(1f + fluctuation);   // white is positive for AI
-    
-    return score;
+    // 1) Terminal check
+    if (IsGameOver()) {
+        if(aiIsBlack){
+            return bPieces.Contains(GameObject.Find("BKing")) ?  +10000f: -10000f;
+            
+        }
+        else return wPieces.Contains(GameObject.Find("WKing")) ? +10000f : -10000f;
+    }
+
+    float material = 0, mobility;
+
+    foreach (var p in wPieces) {
+        material += PieceValue(p);
+        
+    }
+    foreach (var p in bPieces) {
+        material -= PieceValue(p);
+        
+    }
+    List<Move> temp=new List<Move>();
+    GetAllLegalMoves(temp);
+    int bMoveCount;
+    int wMoveCount;
+    if(currentPlayer == "Black"){
+        bMoveCount=temp.Count;
+        currentPlayer = "White";
+        temp=new List<Move>();
+        GetAllLegalMoves(temp);
+        wMoveCount = temp.Count;
+    }
+    else{
+        wMoveCount=temp.Count;
+        currentPlayer = "Black";
+        temp=new List<Move>();
+        GetAllLegalMoves(temp);
+        bMoveCount = temp.Count;
+    }
+    mobility = 0.1f * (wMoveCount - bMoveCount);
+
+    float raw = material  + mobility;
+    return aiIsBlack ? -raw : raw;
 }
 
 private int PieceValue(GameObject piece) {
@@ -278,7 +427,7 @@ private int PieceValue(GameObject piece) {
         case "BBishop":case "WBishop":return 3;
         case "BRook": case "WRook":   return 5;
         case "BQueen":case "WQueen":  return 9;
-        case "BKing": case "WKing":   return 0;
+        case "BKing": case "WKing":   return 10;
     }
     return 0;
 }

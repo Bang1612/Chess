@@ -66,9 +66,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Script\AI.cs" />
+    <Compile Include="Assets\Script\Menu.cs" />
     <Compile Include="Assets\Script\ChessPiece.cs" />
+    <Compile Include="Assets\Script\BoardSnapshot.cs" />
     <Compile Include="Assets\Script\GameManager.cs" />
     <Compile Include="Assets\Script\MovePlate.cs" />
+    <Compile Include="Assets\Script\Misc.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
