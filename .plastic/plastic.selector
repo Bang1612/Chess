@@ -1,0 +1,4 @@
+repository "Chess 2025-04-22_19-59-10/Chess@18968241264921@cloud"
+  path "/"
+    br "/main"
+    co "/main"
