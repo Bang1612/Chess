@@ -4,7 +4,7 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-
+using System.IO;
 public class GameManager : MonoBehaviour
 {
     public GameObject Piece;
@@ -22,6 +22,8 @@ public class GameManager : MonoBehaviour
     public AI.Difficulty aiDifficulty = AI.Difficulty.Dumb;
     public AI ai;
     public bool aiIsBlack = true;
+    public static bool  aiEnable = true;
+    public GameObject WinPopup;
     int wPawny=1;
     int wPiecey=0;
     int bPawny=6;
@@ -29,6 +31,16 @@ public class GameManager : MonoBehaviour
     
     void Start()
     {
+        bool Loaded=false;
+        // bool SavedFileCheck= File.Exists(Path.Combine(Application.persistentDataPath, "saved_game.json"));
+        //Check for save
+        if(SaveManager.instance.CurrentSave != null){
+            // string path = Path.Combine(Application.persistentDataPath, "saved_game.json");
+            // string json = File.ReadAllText(path);
+            LoadSave();
+            Debug.Log("Save Loaded");
+            Loaded=true;
+        }
         ai = GameObject.Find("AI").GetComponent<AI>();
         aiDifficulty = ai.GetAIType();
         switch (aiDifficulty)
@@ -48,9 +60,11 @@ public class GameManager : MonoBehaviour
         GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().enabled = true;
         DownText =GameObject.FindGameObjectWithTag("DownText");
         DownText.SetActive(false);
+        WinPopup.SetActive(false);
         GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().text=currentPlayer;
         // ai = new AI(aiDifficulty);
         // ai.aiType =AI.Difficulty.Dumb;
+        if(!Loaded){
         bPieces = new List<GameObject>{
             Create("BPawn",0,bPawny), Create("BPawn",1,bPawny), Create("BPawn",2,bPawny), Create("BPawn",3,bPawny),
             Create("BPawn",4,bPawny), Create("BPawn",5,bPawny), Create("BPawn",6,bPawny), Create("BPawn",7,bPawny),
@@ -67,6 +81,7 @@ public class GameManager : MonoBehaviour
             SetPosition(bPieces[i]);
             SetPosition(wPieces[i]);
         }
+        }
     }
     GameObject Create(string name, int x, int y){
         GameObject obj = Instantiate(Piece, new Vector3(0,0,-1), Quaternion.identity);
@@ -77,7 +92,9 @@ public class GameManager : MonoBehaviour
         return obj;
     }
     public void SetPosition(GameObject obj){
-        ChessPiece cp = obj.GetComponent<ChessPiece>(); 
+        // Debug.Log("Step 1 in");
+        ChessPiece cp = obj.GetComponent<ChessPiece>();
+        // Debug.Log("Step 2 in"); 
         positions[cp.Getx(),cp.Gety()] = obj;
     }
     public void SetPositionEmpty(int x, int y){
@@ -101,9 +118,10 @@ public class GameManager : MonoBehaviour
         GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().text=currentPlayer;
         // schedule AI only on the *real* board, not on clones
         bool aiTurn = (currentPlayer == "Black" && aiIsBlack)
-                || (currentPlayer == "White" && !aiIsBlack);
+                || (currentPlayer == "White" && !aiIsBlack) ;
+        
 
-        if (!isCloned && aiTurn)
+        if (!isCloned && aiTurn && aiEnable)
             Invoke(nameof(AIMove), 0.5f);
         }
     private void AIMove() {
@@ -127,8 +145,8 @@ public class GameManager : MonoBehaviour
     public void Winner(string winner){
         gameOver=true;
         // GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().enabled = true;
-        GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().text="Winner: "+winner;
-        
+        WinPopup.SetActive(true);
+        GameObject.FindGameObjectWithTag("GameOver").GetComponent<Text>().text="Winner: "+winner;
         DownText.SetActive(true);
     }
     public void GetAllLegalMoves(List<Move> moves){
@@ -274,7 +292,10 @@ public void ApplyMove(Move m){
     SetPositionEmpty(m.fromX,m.fromY);
     startPiece.GetComponent<ChessPiece>().Goto(m.toX,m.toY);
     SetPosition(startPiece);
-    Nexturn();
+    if(!IsGameOver()){
+        Nexturn();
+    }
+    
 
 }
 
@@ -316,6 +337,7 @@ public GameManager Clone() {
     var copy = new GameManager();
     copy.isCloned = true;
     copy.aiIsBlack = this.aiIsBlack;
+    copy.aiDifficulty = this.aiDifficulty;
     copy.currentPlayer = this.currentPlayer;
     copy.gameOver      = this.gameOver;
     copy.positions     = (GameObject[,]) this.positions.Clone();
@@ -323,57 +345,186 @@ public GameManager Clone() {
     copy.wPieces       = new List<GameObject>(this.wPieces);
     return copy;
 }
-// public BoardSnapshot ToBoardSnapshot()
-// {
-//     var snap = new BoardSnapshot();
-//     // whose turn?
-//     snap.whiteToMove = (currentPlayer == "White");
 
-//     // walk every square
-//     for (int x = 0; x < 8; x++)
-//     for (int y = 0; y < 8; y++)
-//     {
-//         GameObject go = positions[x, y];
-//         if (go == null)
-//         {
-//             // empty square
-//             snap.board[x, y] = global::Piece.Empty;
-//         }
-//         else
-//         {
-//             // piece is alive here—map its name to the enum
-//             // strip any "(Clone)" suffix Unity may append
-//             string n = go.name;
-//             int idx = n.IndexOf('(');
-//             if (idx >= 0) n = n.Substring(0, idx);
+public void SaveCreate(){
+    SaveData saveData =new SaveData();
+    saveData.aiIsBlack = this.aiIsBlack;
+    saveData.aiDifficulty = this.aiDifficulty;
+    saveData.currentPlayer = this.currentPlayer;
+    saveData.gameOver = this.gameObject;
+    saveData.positions = SavePosition(this.positions);
+    // saveData.bPieces= new List<GameObject>(this.bPieces);
+    // saveData.wPieces= new List<GameObject>(this.wPieces);
+    // CheckGridContents(saveData.positions);
+    // saveData.UseAI = this.aiEnable;
+    SaveManager.instance.StoreSave(saveData);
 
-//             switch (n)
-//             {
-//                 case "WPawn":   snap.board[x, y] = global::Piece.WPawn;   break;
-//                 case "WKnight": snap.board[x, y] = global::Piece.WKnight; break;
-//                 case "WBishop": snap.board[x, y] = global::Piece.WBishop; break;
-//                 case "WRook":   snap.board[x, y] = global::Piece.WRook;   break;
-//                 case "WQueen":  snap.board[x, y] = global::Piece.WQueen;  break;
-//                 case "WKing":   snap.board[x, y] = global::Piece.WKing;   break;
+}
+public int[,] SavePosition(GameObject[,] positions){
+    int[,] res= new int[8,8];
+    int Checksum=0;
+    for(int x=0;x<8;x++){
+        for(int y=0;y<8;y++){
+            if(positions[x,y]==null){
+                res[x,y]=0;
+            }
+            //Pawn=1, Rook=2, Knight=3, Bishop=4, Queen=5,King=6, White pos, Black neg
+            else{
+                switch (positions[x,y].GetComponent<ChessPiece>().name)
+                {
+                    case "WPawn":
+                    res[x,y]=1;
+                    Checksum++;
+                    break;
+                    case "WRook":
+                    res[x,y]=2;
+                    Checksum++;
+                    break;
+                    case "WKnight":
+                    res[x,y]=3;
+                    Checksum++;
+                    break;
+                    case "WBishop":
+                    res[x,y]=4;
+                    Checksum++;
+                    break;
+                    case "WQueen":
+                    res[x,y]=5;
+                    Checksum++;
+                    break;
+                    case "WKing":
+                    res[x,y]=6;
+                    Checksum++;
+                    break;
 
-//                 case "BPawn":   snap.board[x, y] = global::Piece.BPawn;   break;
-//                 case "BKnight": snap.board[x, y] = global::Piece.BKnight; break;
-//                 case "BBishop": snap.board[x, y] = global::Piece.BBishop; break;
-//                 case "BRook":   snap.board[x, y] = global::Piece.BRook;   break;
-//                 case "BQueen":  snap.board[x, y] = global::Piece.BQueen;  break;
-//                 case "BKing":   snap.board[x, y] = global::Piece.BKing;   break;
+                    case "BPawn":
+                    res[x,y]=-1;
+                    Checksum++;
+                    break;
+                    case "BRook":
+                    res[x,y]=-2;
+                    Checksum++;
+                    break;
+                    case "BKnight":
+                    res[x,y]=-3;
+                    Checksum++;
+                    break;
+                    case "BBishop":
+                    res[x,y]=-4;
+                    Checksum++;
+                    break;
+                    case "BQueen":
+                    res[x,y]=-5;
+                    Checksum++;
+                    break;
+                    case "BKing":
+                    res[x,y]=-6;
+                    Checksum++;
+                    break;
+                    default:
+                    res[x,y]=0;
+                    break;
+                }
+            }
+        }
+    }
+    Debug.Log("Total pieces: "+Checksum.ToString() );
+    // CheckGridContents(res);
+    return res;
+}
 
-//                 default:
-//                     // shouldn't happen, but safe-guard
-//                     snap.board[x, y] = global::Piece.Empty;
-//                     Debug.LogWarning($"Unknown piece name '{go.name}' at [{x},{y}]");
-//                     break;
-//             }
-//         }
-//     }
+void CheckGridContents(int[,] grid)
+{
+    int count=0;
+    int rows = grid.GetLength(0); // Get row count
+    int cols = grid.GetLength(1); // Get column count
 
-//     return snap;
-// }
+    for (int i = 0; i < rows; i++)
+    {
+        for (int j = 0; j < cols; j++)
+        {
+            if(grid[i,j] != 0) count++;
+            
+        }
+    }
+    Debug.Log($"Total piece is {count}");
+}
+public void LoadSave() {
+    SaveData source = SaveManager.instance.CurrentSave;
+    this.aiIsBlack = source.aiIsBlack;
+    this.aiDifficulty = source.aiDifficulty;
+    this.currentPlayer = source.currentPlayer;
+    this.gameOver = source.gameOver;
+    CheckGridContents(source.positions);
+    this.bPieces = new List<GameObject>();
+    this.wPieces= new List<GameObject>();
+    // Array.Fill(this.positions,null);
+    for(int x=0;x<8;x++){
+        for(int y=0;y<8;y++){
+            switch (source.positions[x,y])
+            {
+                case 0:
+                this.positions[x,y]=null;
+                break;
+                case 1:
+                this.wPieces.Add(Create("WPawn",x,y));
+                // Debug.Log("Place Piece");
+                break;
+                case 2:
+                this.wPieces.Add(Create("WRook",x,y));
+                break;
+                case 3:
+                this.wPieces.Add(Create("WKnight",x,y));
+                break;
+                case 4:
+                this.wPieces.Add(Create("WBishop",x,y));
+                break;
+                case 5:
+                this.wPieces.Add(Create("WQueen",x,y));
+                break;
+                case 6:
+                this.wPieces.Add(Create("WKing",x,y));
+                break;
+
+                case -1:
+                this.bPieces.Add(Create("BPawn",x,y));
+                // Debug.Log("Place Piece");
+                break;
+                case -2:
+                this.bPieces.Add(Create("BRook",x,y));
+                break;
+                case -3:
+                this.bPieces.Add(Create("BKnight",x,y));
+                break;
+                case -4:
+                this.bPieces.Add(Create("BBishop",x,y));
+                break;
+                case -5:
+                this.bPieces.Add(Create("BQueen",x,y));
+                break;
+                case -6:
+                this.bPieces.Add(Create("BKing",x,y));
+                break;
+                default:
+                break;
+            }
+        }
+    }
+    
+    Debug.Log("Black: " +bPieces.Count.ToString());
+    Debug.Log("White: " +wPieces.Count.ToString());
+    for(int i=0;i<this.bPieces.Count;i++){
+        if(bPieces[i]==null){
+            Debug.Log("Impossible");
+        }
+        SetPosition(bPieces[i]);
+        Debug.Log($"Place {i}");
+    }
+    for(int i=0;i<this.wPieces.Count;i++){
+        SetPosition(wPieces[i]);
+    }
+}
+
 
 
 public float Evaluate() {

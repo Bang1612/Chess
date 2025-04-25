@@ -1,12 +1,12 @@
-using System.Collections.Generic;
+
 using UnityEngine;
 
 public class ChessPiece : MonoBehaviour
 {
     public GameManager gm;
     public GameObject movePlate;
-    private int xOnBoard =-1;
-    private int yOnBoard =-1;
+    public int xOnBoard =-1;
+    public int yOnBoard =-1;
 
     public string Player;
     public Sprite BlackKing, BlackQueen, BlackRook, BlackBishop, BlackKnight, BlackPawn;

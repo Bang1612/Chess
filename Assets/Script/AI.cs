@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
+using System.IO;
 public class AI : MonoBehaviour
 {
     public enum Difficulty { Dumb, Average, Smart }
@@ -30,6 +30,9 @@ public class AI : MonoBehaviour
     void Awake()
     {
         gm = GameObject.FindFirstObjectByType<GameManager>();
+        // if(File.Exists(Path.Combine(Application.persistentDataPath, "saved_game.json"))){
+            
+        // }
     }
     public Difficulty GetAIType(){
         return aiType;
