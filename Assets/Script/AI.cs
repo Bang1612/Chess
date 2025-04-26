@@ -15,8 +15,8 @@ public class AI : MonoBehaviour
     public float  randomness = 0.3f;   // for Average level
 
     [HideInInspector] public Move bestMove;
-
-    GameManager      gm;
+    public static AI instance; 
+    public GameManager      gm;
     Dictionary<string,TTNode> tTable = new Dictionary<string,TTNode>();
 
     // --- Transposition Table Node ---
@@ -29,7 +29,13 @@ public class AI : MonoBehaviour
 
     void Awake()
     {
-        gm = GameObject.FindFirstObjectByType<GameManager>();
+
+        if (instance != null && instance != this)
+        {
+            Destroy(this.gameObject);
+        } else {
+            instance = this;
+        }
         // if(File.Exists(Path.Combine(Application.persistentDataPath, "saved_game.json"))){
             
         // }
@@ -37,7 +43,10 @@ public class AI : MonoBehaviour
     public Difficulty GetAIType(){
         return aiType;
     }
-
+    void Start()
+    {
+        gm = GameManager.instance;
+    }
     /// <summary>
     /// Call this when it’s the AI’s turn.
     /// Starts iterative deepening in the background.

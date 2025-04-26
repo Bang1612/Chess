@@ -23,4 +23,7 @@ public class SaveManager : MonoBehaviour
     {
         CurrentSave = data;
     }
+    public void SaveDelete(){
+        CurrentSave = null;
+    }
 }

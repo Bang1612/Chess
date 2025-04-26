@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.IO;
+using Unity.Netcode;
 
 public class Menu : MonoBehaviour
 {
@@ -19,7 +20,7 @@ public class Menu : MonoBehaviour
         {
             File.Delete(savePath);
         }
-
+        SaveManager.instance.SaveDelete() ;
         // Update the Continue button state
         RefreshButtonState();
     }
@@ -63,5 +64,30 @@ public class Menu : MonoBehaviour
     
     public void DisableAI(){
         GameManager.aiEnable= false;
+    }
+    public void OnHostClicked()
+    {
+        // disable AI, start host
+        GameManager.aiEnable = false;
+        NetworkManager.Singleton.ConnectionApprovalCallback += ApprovalCheck;
+        Debug.Log("Server init");
+        NetworkManager.Singleton.StartHost();
+        
+        SceneManager.LoadScene("Game");
+    }
+
+    public void OnJoinClicked()
+    {
+        GameManager.aiEnable = false;
+        NetworkManager.Singleton.StartClient();
+        SceneManager.LoadScene("Game");
+    }
+
+    // Optional: approve all connections
+    private void ApprovalCheck(NetworkManager.ConnectionApprovalRequest req,
+                               NetworkManager.ConnectionApprovalResponse res)
+    {
+        res.Approved = true;
+        res.CreatePlayerObject = true;
     }
 }

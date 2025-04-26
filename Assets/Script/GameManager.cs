@@ -5,9 +5,11 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using System.IO;
-public class GameManager : MonoBehaviour
+using Unity.Netcode;
+public class GameManager : NetworkBehaviour
 {
     public GameObject Piece;
+    public static GameManager instance; 
     // public Text turnPlayerText;
     // public Text winnerText;
     // public Text restartText;
@@ -28,9 +30,28 @@ public class GameManager : MonoBehaviour
     int wPiecey=0;
     int bPawny=6;
     int bPieceyP=7;
-    
+    public bool amWhite = true;
+    void Awake()
+    {
+        if (instance != null && instance != this)
+        {
+            Destroy(this.gameObject);
+        } else {
+            instance = this;
+        } 
+    }
     void Start()
     {
+        if (NetworkManager.Singleton.IsHost)
+            amWhite = true;    // Host plays White
+        else if (IsClient){
+            amWhite = false; // Second player is Black
+            wPawny=6;
+            wPiecey=7;
+            bPawny=1;
+            bPieceyP=0;
+        }
+               
         bool Loaded=false;
         // bool SavedFileCheck= File.Exists(Path.Combine(Application.persistentDataPath, "saved_game.json"));
         //Check for save
@@ -41,8 +62,12 @@ public class GameManager : MonoBehaviour
             Debug.Log("Save Loaded");
             Loaded=true;
         }
-        ai = GameObject.Find("AI").GetComponent<AI>();
+        if(ai.enabled){
+            ai=AI.instance;
+         // ai = GameObject.Find("AI").GetComponent<AI>();
         aiDifficulty = ai.GetAIType();
+        }
+        
         switch (aiDifficulty)
         {
             case AI.Difficulty.Dumb:
@@ -64,6 +89,7 @@ public class GameManager : MonoBehaviour
         GameObject.FindGameObjectWithTag("UpperText").GetComponent<Text>().text=currentPlayer;
         // ai = new AI(aiDifficulty);
         // ai.aiType =AI.Difficulty.Dumb;
+        
         if(!Loaded){
         bPieces = new List<GameObject>{
             Create("BPawn",0,bPawny), Create("BPawn",1,bPawny), Create("BPawn",2,bPawny), Create("BPawn",3,bPawny),
@@ -83,12 +109,52 @@ public class GameManager : MonoBehaviour
         }
         }
     }
+    public void SubmitMove(Move m)
+    {
+        if (NetworkManager.Singleton.IsListening)
+        {
+            // we're online: send to server
+            SubmitMoveServerRpc(m.fromX, m.fromY, m.toX, m.toY, m.isAttack);
+        }
+        else
+        {
+            // offline: just apply locally
+            ApplyMove(m);
+        }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    void SubmitMoveServerRpc(int fx, int fy, int tx, int ty, bool attack)
+    {
+        var m = new Move(fx, fy, tx, ty, attack);
+
+        // YOU: validate turn / legality here if you like…
+
+        // apply on server
+        ApplyMove(m);
+
+        // broadcast to all clients
+        BroadcastMoveClientRpc(fx, fy, tx, ty, attack);
+    }
+
+    [ClientRpc]
+    void BroadcastMoveClientRpc(int fx, int fy, int tx, int ty, bool attack)
+    {
+        // avoid re-applying on host (it already did ApplyMove)
+        if (!IsServer)
+        {
+            ApplyMove(new Move(fx, fy, tx, ty, attack));
+        }
+    }
     GameObject Create(string name, int x, int y){
         GameObject obj = Instantiate(Piece, new Vector3(0,0,-1), Quaternion.identity);
         ChessPiece cp = obj.GetComponent<ChessPiece>(); 
         cp.name = name;
         cp.Goto(x,y);
         cp.Activated();
+
+    //     var no = obj.GetComponent<NetworkObject>();
+    // no.Spawn();
         return obj;
     }
     public void SetPosition(GameObject obj){

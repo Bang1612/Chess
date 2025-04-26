@@ -1,6 +1,6 @@
 
 using UnityEngine;
-
+using Unity.Netcode;
 public class ChessPiece : MonoBehaviour
 {
     public GameManager gm;
@@ -15,6 +15,7 @@ public class ChessPiece : MonoBehaviour
     void Start()
     {
         gm = GameObject.Find("GameManager").GetComponent<GameManager>();
+        gm = GameManager.instance;
     }
     public void Activated(){
         
@@ -102,6 +103,12 @@ public class ChessPiece : MonoBehaviour
     }
     public void OnMouseUp()
     {
+        if (NetworkManager.Singleton.IsListening)
+    {
+        if ((gm.amWhite && Player != "White") ||
+            (!gm.amWhite && Player != "Black"))
+            return;
+    }
         if(!gm.IsGameOver() && gm.GetCurrentPlayer() == Player){
             Debug.Log("Start spamming MovePlates");
             DestroyMovePlate();
